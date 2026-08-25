@@ -1,0 +1,29 @@
+# KnowledgeOS - example application settings
+#
+# Non-secret configuration only. Secrets belong in .env.
+# Copy to settings.yaml (git-ignored) to override locally.
+#
+# Placeholder values. Real keys are added as each component is implemented.
+
+app:
+  name: knowledgeos
+  env: local
+  log_level: info
+
+paths:
+  raw: /data/raw
+  processed: /data/processed
+  indexes: /data/indexes
+  generated: /data/generated
+
+ingestion:
+  # source-specific settings, e.g. SEC EDGAR rate limits and form types
+  sources: []
+
+retrieval:
+  # chunking, indexing, and search settings
+  {}
+
+models:
+  # provider-agnostic model settings; credentials stay in .env
+  {}

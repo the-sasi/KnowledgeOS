@@ -1,0 +1,36 @@
+# KnowledgeOS - local orchestration placeholder
+#
+# Every component runs locally through Docker. Services are added here one at
+# a time as they are implemented. Nothing is defined yet because no runtime,
+# database, or vector store has been chosen.
+#
+# Intended shape once components exist:
+#
+#   services:
+#     api:
+#       build:
+#         context: .
+#         dockerfile: Dockerfile
+#       env_file: .env
+#       volumes:
+#         - ./data:/data
+#       ports:
+#         - "8000:8000"
+#
+#     web:
+#       build:
+#         context: ./apps/web
+#       env_file: .env
+#       ports:
+#         - "3000:3000"
+#
+#     # database:     -> see infrastructure/database/
+#     # vector_store: -> see infrastructure/vector_store/
+#
+#   volumes:
+#     # named volumes for stateful infrastructure
+#
+# Config that is shared across services belongs in config/.
+# Compose overrides and extra Dockerfiles belong in infrastructure/docker/.
+
+name: knowledgeos
