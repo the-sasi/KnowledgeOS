@@ -6,7 +6,8 @@ tested on its own, and can be replaced without touching the others.
 | Module          | Responsibility                                              |
 | --------------- | ----------------------------------------------------------- |
 | `ingestion`     | Fetch and normalize source documents (SEC EDGAR first)       |
-| `retrieval`     | Chunking, indexing, search, and RAG assembly                 |
+| `chunking`      | Canonical documents -> retrieval-sized chunks                 |
+| `retrieval`     | Indexing, search, and RAG assembly                            |
 | `agents`        | Multi-step research workflows built on retrieval and models  |
 | `models`        | Abstraction over LLM and embedding providers                 |
 | `evaluation`    | Quality measurement for retrieval and agent output           |

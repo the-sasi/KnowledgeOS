@@ -1,36 +1,112 @@
-# KnowledgeOS - local orchestration placeholder
+# KnowledgeOS - local infrastructure
 #
-# Every component runs locally through Docker. Services are added here one at
-# a time as they are implemented. Nothing is defined yet because no runtime,
-# database, or vector store has been chosen.
+# Currently brings up the two stateful backing services. Application
+# services (api, web) are added here once they exist.
 #
-# Intended shape once components exist:
+#   cp .env.example .env
+#   docker compose up -d
 #
-#   services:
-#     api:
-#       build:
-#         context: .
-#         dockerfile: Dockerfile
-#       env_file: .env
-#       volumes:
-#         - ./data:/data
-#       ports:
-#         - "8000:8000"
-#
-#     web:
-#       build:
-#         context: ./apps/web
-#       env_file: .env
-#       ports:
-#         - "3000:3000"
-#
-#     # database:     -> see infrastructure/database/
-#     # vector_store: -> see infrastructure/vector_store/
-#
-#   volumes:
-#     # named volumes for stateful infrastructure
-#
-# Config that is shared across services belongs in config/.
-# Compose overrides and extra Dockerfiles belong in infrastructure/docker/.
+# All credentials and ports come from .env. Nothing is hardcoded here.
 
 name: knowledgeos
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: knowledgeos-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required - see .env.example}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required - see .env.example}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required - see .env.example}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      # Bound to loopback: reachable from the host, not from the network.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # Bind mount to a local project folder so the data is visible on the host.
+      - ${POSTGRES_DATA_DIR:-./data/postgres}:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    container_name: knowledgeos-qdrant
+    restart: unless-stopped
+    environment:
+      QDRANT__SERVICE__HTTP_PORT: 6333
+      QDRANT__SERVICE__GRPC_PORT: 6334
+      QDRANT__LOG_LEVEL: ${QDRANT_LOG_LEVEL:-INFO}
+    ports:
+      - "127.0.0.1:${QDRANT_HTTP_PORT:-6333}:6333"
+      - "127.0.0.1:${QDRANT_GRPC_PORT:-6334}:6334"
+    volumes:
+      # Bind mount to a local project folder so the data is visible on the host.
+      - ${QDRANT_DATA_DIR:-./data/indexes/qdrant}:/qdrant/storage
+    healthcheck:
+      # The Qdrant image ships no curl/wget, so probe the readiness endpoint
+      # over bash's /dev/tcp and require a 200 in the response.
+      # CMD-SHELL would use /bin/sh (dash), which has no /dev/tcp; call bash.
+      test:
+        - CMD
+        - bash
+        - -c
+        - "exec 3<>/dev/tcp/127.0.0.1/6333 && printf 'GET /readyz HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && head -n 1 <&3 | grep -q 200"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # Application/tooling container: migrations, ingestion, verification.
+  # Behind a profile, so plain `docker compose up -d` still starts only the
+  # two databases. Invoke with:
+  #   docker compose run --rm app python -m knowledgeos.db.migrate
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: knowledgeos-app
+    profiles: ["tools"]
+    env_file: .env
+    environment:
+      # Inside the compose network the database is reachable by service name,
+      # which is why this overrides whatever DATABASE_URL .env carries.
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      VECTOR_STORE_URL: http://qdrant:6333
+    volumes:
+      # Live source and data, so edits apply without a rebuild and the raw
+      # SEC files are the same ones the host sees.
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+
+  # Database browser: a web UI for inspecting PostgreSQL by hand.
+  # Behind the "ui" profile, so `docker compose up -d` still starts only the
+  # two databases. A development tool, not part of the platform.
+  #   docker compose --profile ui up -d
+  #   http://localhost:8080
+  adminer:
+    image: adminer:4.8.1-standalone
+    container_name: knowledgeos-adminer
+    restart: unless-stopped
+    profiles: ["ui"]
+    environment:
+      # Prefill the server field so only the password has to be typed.
+      ADMINER_DEFAULT_SERVER: postgres
+      ADMINER_DESIGN: dracula
+    ports:
+      - "127.0.0.1:${ADMINER_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+# No named volumes: both services bind-mount into ./data/ so their state lives
+# in the project folder and is inspectable from the host. Those paths are
+# git-ignored. See data/README.md.

@@ -12,4 +12,10 @@ Tests exist from the start so every module is testable as it is written.
 `evaluation/` answers *"is it good?"* — expect scores and thresholds, not
 pass/fail assertions.
 
-Test runner not chosen yet; mirror the `services/` layout inside each folder.
+Runner: **pytest** (`pytest.ini` at the repo root puts the repo on `sys.path`).
+
+```bash
+docker compose run --rm app python -m pytest tests/unit -q
+```
+
+Mirror the `services/` layout inside each folder.

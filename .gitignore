@@ -44,3 +44,4 @@ tmp/
 # ---- Local config overrides ----------------------------------------------
 config/settings.yaml
 config/settings.local.*
+infrastructure/database/migrations
